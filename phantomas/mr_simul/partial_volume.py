@@ -33,7 +33,7 @@ def compute_affine_matrix(voxel_size, image_size):
 def compute_corner_positions(voxel_size, image_size):
     """
     Computes the positions of voxel corners.
-    
+
     Parameters
     ----------
     voxel_size : double
@@ -59,10 +59,10 @@ def compute_corner_positions(voxel_size, image_size):
 
 def compute_fiber_masks(fibers, voxel_size, image_size):
     '''
-    Creates masks of the fibers. Voxels completely filled by the bundle are 
-    set to 2. Voxels which are intersected but not filled by the bundle are 
+    Creates masks of the fibers. Voxels completely filled by the bundle are
+    set to 2. Voxels which are intersected but not filled by the bundle are
     set to 1. Background is set to 0.
-    
+
     Parameters
     ----------
     fibers : sequence, length (F, )
@@ -82,6 +82,7 @@ def compute_fiber_masks(fibers, voxel_size, image_size):
     mask = np.zeros((dim_x, dim_y, dim_z, nb_fibers), dtype=np.uint8)
 
     for i, fiber in enumerate(fibers):
+        print("fiber " + str(i))
         radius = fiber.get_radius()
         nb_points = fiber.get_nb_points()
         for n in range(nb_points):
@@ -107,16 +108,16 @@ def compute_fiber_masks(fibers, voxel_size, image_size):
 
 def compute_spherical_region_masks(centers, radii, voxel_size, image_size):
     '''
-    Creates a mask of a list of spherical regions. 
+    Creates a mask of a list of spherical regions.
     Voxels completely filled by the region are set to 2.
     Voxels which are intersected by the region are set to 1.
     Background is set to 0.
-    
+
     Parameters
     ----------
     centers : sequence of ndarray (3, )
         Centers of the spherical regions.
-    radii : sequence 
+    radii : sequence
         Radii of the spherical regions.
     voxel_size : int
         the voxel size in mm (voxels are isotropic).
@@ -132,9 +133,9 @@ def compute_spherical_region_masks(centers, radii, voxel_size, image_size):
     center_positions = np.dot(affine[:3, :3], indices.reshape(3, dim_image)).T \
                      + affine[:3, 3]
 
-    corners = np.asarray([[1, 1, 1], [1, 1, -1], 
-                          [1, -1, 1], [1, -1, -1], 
-                          [-1, 1, 1], [-1, 1, -1], 
+    corners = np.asarray([[1, 1, 1], [1, 1, -1],
+                          [1, -1, 1], [1, -1, -1],
+                          [-1, 1, 1], [-1, 1, -1],
                           [-1, -1, 1], [-1, -1, -1]])
 
     nb_regions = len(radii)
@@ -143,13 +144,13 @@ def compute_spherical_region_masks(centers, radii, voxel_size, image_size):
     for i, (center, radius) in enumerate(zip(centers, radii)):
         center_to_centers = center_positions - center
         dst_to_centers = (center_to_centers ** 2).sum(1)
-    
+
         center_to_corners = center_to_centers.reshape((dim_image, 3, 1)) \
                          + 0.5 * voxel_size * corners.T
         dst_to_corners = (center_to_corners ** 2).sum(1)
         mask_intersected = np.logical_or(mask[..., i], np.any(dst_to_corners < radius ** 2, axis=1))
         mask_filled = np.logical_or(mask[..., i], np.all(dst_to_corners < radius ** 2, axis=1))
-    
+
         mask[mask_intersected, i] = 1
         mask[mask_filled, i] = 2
 
@@ -159,7 +160,7 @@ def compute_spherical_region_masks(centers, radii, voxel_size, image_size):
 def spherical_regions_volume_fraction(centers, radii, voxel_center, voxel_size, resolution=10):
     """
     Computes the volume fraction of a set of spherical regions.
-    
+
     Parameters
     ----------
     centers : sequence of ndarray (3, ), centers of the spherical regions
@@ -183,9 +184,9 @@ def spherical_regions_volume_fraction(centers, radii, voxel_center, voxel_size, 
         dst_to_center = (center_to_center ** 2).sum(1)
         volume_fraction = np.logical_or(volume_fraction, dst_to_center < radius ** 2)
     return volume_fraction.sum() / dim_grid
- 
 
-def fibers_volume_fraction(fibers, intersect_codes, 
+
+def fibers_volume_fraction(fibers, intersect_codes,
                            voxel_center, voxel_size, resolution=10):
     '''
     Given a set of fibers and a voxel, returns the volume fraction of each fiber,
@@ -273,13 +274,13 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
     for i, j, k in zip(gm_indices[0], gm_indices[1], gm_indices[2]):
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         gm_volume_fraction[i, j, k] = \
-              spherical_regions_volume_fraction([np.asarray([0., 0., 0.])], 
-                                                [phantom_radius], 
+              spherical_regions_volume_fraction([np.asarray([0., 0., 0.])],
+                                                [phantom_radius],
                                                 voxel_center, voxel_size)
-    
+
     # Background volume fraction
     background_volume_fraction = 1.0 - gm_volume_fraction
-    
+
     # White Matter volume fraction
     wm_volume_fraction = np.zeros(fiber_masks.shape[:3])
     wm_partial_volume = np.any(fiber_masks == 1, axis=-1)
@@ -289,14 +290,14 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         intersect_codes = fiber_masks[i, j, k]
         wm_volume_fraction[i, j, k] = \
-            np.sum(fibers_volume_fraction(fibers, intersect_codes, 
+            np.sum(fibers_volume_fraction(fibers, intersect_codes,
                                           voxel_center, voxel_size))
     wm_volume_fraction[np.any(fiber_masks == 2, axis=-1)] = 1.0
     # mask out anything outside of the phantom
     np.clip(wm_volume_fraction, 0., gm_volume_fraction, wm_volume_fraction)
     # Make sure GM + WM <= 1.
     np.clip(gm_volume_fraction, 0 , 1 - wm_volume_fraction, gm_volume_fraction)
-    
+
     # CSF volume fraction
     csf_volume_fraction = np.zeros(wm_volume_fraction.shape)
     csf_volume_fraction[np.any(region_masks == 2, axis=-1)] = 1.0
@@ -305,11 +306,11 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
     for i, j, k in zip(csf_indices[0], csf_indices[1], csf_indices[2]):
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         csf_volume_fraction[i, j, k] = \
-              spherical_regions_volume_fraction(region_centers, region_radii, 
+              spherical_regions_volume_fraction(region_centers, region_radii,
                                                 voxel_center, voxel_size)
 
     # Make sure everything sums to one
-    np.clip(wm_volume_fraction, 0., 1.0 - csf_volume_fraction, 
+    np.clip(wm_volume_fraction, 0., 1.0 - csf_volume_fraction,
             wm_volume_fraction)
     gm_volume_fraction = 1.0 - background_volume_fraction \
                              - wm_volume_fraction \
@@ -333,13 +334,13 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
         k = gm_indices[2][n]
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         gm_volume_fraction[i, j, k] = \
-              spherical_regions_volume_fraction([np.asarray([0., 0., 0.])], 
-                                                [phantom_radius], 
+              spherical_regions_volume_fraction([np.asarray([0., 0., 0.])],
+                                                [phantom_radius],
                                                 voxel_center, args.struct_res)
-    
+
     # Background volume fraction
     background_volume_fraction = 1.0 - gm_volume_fraction
-    
+
     # White Matter volume fraction
     wm_volume_fraction = np.zeros(fiber_masks.shape[:3])
     wm_partial_volume = np.any(fiber_masks == 1, axis=-1)
@@ -350,14 +351,14 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         intersect_codes = fiber_masks[i, j, k]
         wm_volume_fraction[i, j, k] = \
-            np.sum(fibers_volume_fraction(fibers, intersect_codes, 
+            np.sum(fibers_volume_fraction(fibers, intersect_codes,
                                           voxel_center, args.struct_res))
     wm_volume_fraction[np.any(fiber_masks == 2, axis=-1)] = 1.0
     # mask out anything outside of hte phantom
     np.clip(wm_volume_fraction, 0., gm_volume_fraction, wm_volume_fraction)
     # Make sure GM + WM <= 1.
     np.clip(gm_volume_fraction, 0 , 1 - wm_volume_fraction, gm_volume_fraction)
-    
+
     # CSF volume fraction
     csf_volume_fraction = np.zeros(wm_volume_fraction.shape)
     csf_volume_fraction[np.any(region_masks == 2, axis=-1)] = 1.0
@@ -367,7 +368,5 @@ def compute_volume_fractions(phantom_center, phantom_radius, gm_mask,
         i, j, k = csf_indices[0][n], csf_indices[1][n], csf_indices[2][n]
         voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
         csf_volume_fraction[i, j, k] = \
-              spherical_regions_volume_fraction(region_centers, region_radii, 
+              spherical_regions_volume_fraction(region_centers, region_radii,
                                                 voxel_center, args.struct_res)
-    
-    

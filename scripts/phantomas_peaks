@@ -108,23 +108,20 @@ print "\tComputing mask for each structure."
 affine = compute_affine_matrix(args.res, phantom_fov)
 phantom_center = np.array([0., 0., 0.])
 
-
-fiber_masks = compute_fiber_masks(fibers, args.res, phantom_fov)
 gm_mask = compute_spherical_region_masks([phantom_center],
                                          [phantom_radius], args.res,
                                          phantom_fov)[..., 0]
+
+fiber_masks = compute_fiber_masks(fibers, args.res, phantom_fov)
 for i in range(len(fiber_names)):
     nib.Nifti1Image(fiber_masks[:,:,:,i].astype("float32"),affine).to_filename(args.output_dir + "mask-" + fiber_names[i] + "_" + args.output)
 
-print "\tComputing fiber orientation distribution."
 
-gm_mask = compute_spherical_region_masks([phantom_center],
-                                         [phantom_radius], args.res,
-                                         phantom_fov)[..., 0]
+
 wm_mask = np.any(fiber_masks > 0, axis=-1)
 wm_indices = np.nonzero(wm_mask)
 resolution = 1
-peaks = np.zeros(list(wm_mask.shape) + [15])
+peaks = np.zeros(list(wm_mask.shape) + [15],dtype=np.float32)
 for i, j, k in zip(wm_indices[0], wm_indices[1], wm_indices[2]):
     voxel_center = np.dot(affine, np.asarray([i, j, k, 1.0]))[:3]
     fiber_indices = np.nonzero(fiber_masks[i, j, k])[0]
